@@ -13,6 +13,7 @@
 # See https://pydantic-docs.helpmanual.io/usage/settings/
 # Note, complex types like lists are read as json-encoded strings.
 
+import os
 
 from functools import lru_cache
 from pathlib import Path
@@ -42,9 +43,20 @@ class Database(BaseModel):
     db: str = "postgres"
 
 
+class LineConfig(BaseModel):
+    channel_secret: str = os.getenv("LINE__CHANNEL_SECRET")
+    channel_access_token: str = os.getenv("LINE__CHANNEL_ACCESS_TOKEN")
+
+
+class ExternalApi(BaseModel):
+    wstd_api_key: str = os.getenv("EXTERNAL__WSTD_API_KEY")
+
+
 class Settings(BaseSettings):
     security: Security
     database: Database
+    line: LineConfig
+    external: ExternalApi
 
     @computed_field  # type: ignore[prop-decorator]
     @property

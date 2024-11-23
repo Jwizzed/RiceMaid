@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.api import api_messages
-from app.api.endpoints import auth, predictions, users
+from app.api.endpoints import auth, predictions, line_webhook, users
 
 # Create the auth router
 auth_router = APIRouter()
@@ -38,15 +38,11 @@ api_router = APIRouter(
                     "examples": {
                         "invalid_file": {
                             "summary": "Invalid file format or missing file",
-                            "value": {
-                                "detail": "Invalid file format or file not found"
-                            },
+                            "value": {"detail": "Invalid file format or file not found"},
                         },
                         "invalid_model": {
                             "summary": "Model weights file not found or invalid",
-                            "value": {
-                                "detail": "Model weights file not found or invalid"
-                            },
+                            "value": {"detail": "Model weights file not found or invalid"},
                         },
                     }
                 }
@@ -56,31 +52,4 @@ api_router = APIRouter(
 )
 
 api_router.include_router(users.router, prefix="/users", tags=["users"])
-
-api_router.include_router(
-    predictions.router,
-    prefix="/predictions",
-    tags=["predictions"],
-    responses={
-        413: {
-            "description": "Request entity too large",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "File too large. Maximum size allowed is 10MB"
-                    }
-                }
-            },
-        },
-        415: {
-            "description": "Unsupported media type",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "File type not supported. Supported types: jpg, jpeg, png"
-                    }
-                }
-            },
-        },
-    },
-)
+api_router.include_router(line_webhook.router, prefix="/line", tags=["line"])
