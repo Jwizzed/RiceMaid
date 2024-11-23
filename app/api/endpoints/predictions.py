@@ -1,9 +1,9 @@
-from typing import tuple
 
 import numpy as np
 import tensorflow as tf
 from fastapi import APIRouter
 from PIL import Image
+from PIL.ImageFile import ImageFile
 
 from app.schemas.requests import ImagePredictionRequest
 from app.schemas.responses import PredictionResponse
@@ -11,7 +11,9 @@ from app.schemas.responses import PredictionResponse
 router = APIRouter(prefix="/predictions", tags=["predictions"])
 
 
-def create_model(im_height=300, im_width=300, num_classes=3):
+def create_model(
+        im_height: int = 300, im_width: int = 300, num_classes: int = 3
+) -> tf.keras.Model:  # Add type hints
     covn_base = tf.keras.applications.EfficientNetB3(
         weights="imagenet", include_top=False, input_shape=(im_height, im_width, 3)
     )
@@ -35,7 +37,7 @@ def create_model(im_height=300, im_width=300, num_classes=3):
 
 
 async def predict_image(
-    image_path: str, weights_path: str, im_height: int = 300, im_width: int = 300
+        image_path: str, weights_path: str, im_height: int = 300, im_width: int = 300
 ) -> tuple[str, float]:
     # Create model and load weights
     model = create_model(im_height, im_width)
@@ -49,7 +51,7 @@ async def predict_image(
     )
 
     # Process image
-    img = Image.open(image_path)
+    img: ImageFile = Image.open(image_path)
     img = img.resize((im_width, im_height))
     img_array = np.array(img)
     img_array = np.expand_dims(img_array, axis=0)
@@ -58,7 +60,7 @@ async def predict_image(
     # Make prediction
     predictions = model.predict(preprocessed_img)
     predicted_class = np.argmax(predictions[0])
-    probability = float(predictions[0][predicted_class])  # Convert to Python float
+    probability = float(predictions[0][predicted_class])
 
     labels = ["BBCH11", "BBCH12", "BBCH13"]
     predicted_label = labels[predicted_class]
@@ -72,7 +74,7 @@ async def predict_image(
     description="Predict image class using the ML model",
 )
 async def predict_image_endpoint(
-    prediction_request: ImagePredictionRequest,
+        prediction_request: ImagePredictionRequest,
 ) -> PredictionResponse:
     predicted_label, probability = await predict_image(
         image_path=prediction_request.image_path,

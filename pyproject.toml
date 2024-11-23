@@ -21,6 +21,7 @@ pillow = "^11.0.0"
 requests = "^2.32.3"
 packaging = "23.0"
 asyncpg = "^0.30.0"
+stubs = "^1.0.0"
 
 [tool.poetry.group.dev.dependencies]
 coverage = "^7.6.1"
