@@ -17,3 +17,10 @@ class UserUpdatePasswordRequest(BaseRequest):
 class UserCreateRequest(BaseRequest):
     email: EmailStr
     password: str
+
+
+class ImagePredictionRequest(BaseRequest):
+    image_path: str
+    weights_path: str
+    im_height: int = 300
+    im_width: int = 300
