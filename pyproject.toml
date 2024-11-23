@@ -17,6 +17,7 @@ pyjwt = "^2.9.0"
 python-multipart = "^0.0.9"
 sqlalchemy = "^2.0.32"
 tensorflow = "^2.18.0"
+apscheduler = "^3.10.4"
 
 [tool.poetry.group.dev.dependencies]
 coverage = "^7.6.1"
