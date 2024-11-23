@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.api import api_messages
-from app.api.endpoints import auth, users, predictions
+from app.api.endpoints import auth, predictions, users
 
 # Create the auth router
 auth_router = APIRouter()

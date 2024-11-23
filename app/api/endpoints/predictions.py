@@ -1,9 +1,9 @@
-from typing import Tuple
+from typing import tuple
 
 import numpy as np
 import tensorflow as tf
-from PIL import Image
 from fastapi import APIRouter
+from PIL import Image
 
 from app.schemas.requests import ImagePredictionRequest
 from app.schemas.responses import PredictionResponse
@@ -36,7 +36,7 @@ def create_model(im_height=300, im_width=300, num_classes=3):
 
 async def predict_image(
     image_path: str, weights_path: str, im_height: int = 300, im_width: int = 300
-) -> Tuple[str, float]:
+) -> tuple[str, float]:
     # Create model and load weights
     model = create_model(im_height, im_width)
     model.load_weights(weights_path)
