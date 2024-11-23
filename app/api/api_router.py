@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.api import api_messages
-from app.api.endpoints import auth, iot, line_webhook, users, carbon_credit
+from app.api.endpoints import auth, iot, line_user, line_webhook, users, carbon_credit
 
 # Create the auth router
 auth_router = APIRouter()
@@ -55,3 +55,4 @@ api_router.include_router(users.router, prefix="/users", tags=["users"])
 api_router.include_router(line_webhook.router, prefix="/line", tags=["line"])
 api_router.include_router(iot.router, prefix="/iot", tags=["iot"])
 api_router.include_router(carbon_credit.router, prefix="/carbon-credit", tags=["carbon_credit"])
+api_router.include_router(line_user.router, prefix="/line-user", tags=["line_user"])

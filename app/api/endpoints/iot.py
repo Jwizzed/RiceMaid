@@ -25,7 +25,7 @@ async def create_water_level(
         id=data.id,
         device_id=data.device_id,
         water_level=data.water_level,
-        create_time=data.create_time or datetime.utcnow(),
+        create_time=data.create_time,
     )
     session.add(db_entry)
     await session.commit()

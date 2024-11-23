@@ -14,7 +14,6 @@
 # Note, complex types like lists are read as json-encoded strings.
 
 import os
-
 from functools import lru_cache
 from pathlib import Path
 
@@ -52,11 +51,17 @@ class ExternalApi(BaseModel):
     wstd_api_key: str = os.getenv("EXTERNAL__WSTD_API_KEY")
 
 
+class LLMConfig(BaseModel):
+    gemini_acesss_token: str = os.getenv("LLM__GEMINI_ACCESS_TOKEN")
+    tavily_api_key: str = os.getenv("LLM__TAVILY_API_KEY")
+
+
 class Settings(BaseSettings):
     security: Security
     database: Database
     line: LineConfig
     external: ExternalApi
+    llm: LLMConfig
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -79,4 +84,4 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    return Settings()  # type: ignore
+    return Settings()

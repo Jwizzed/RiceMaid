@@ -49,6 +49,14 @@ class RefreshToken(Base):
     user: Mapped["User"] = relationship(back_populates="refresh_tokens")
 
 
+class LineUser(Base):
+    __tablename__ = "line_user"
+
+    user_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(256), nullable=False)
+    province: Mapped[str] = mapped_column(String(256), nullable=False)
+
+
 class FieldWaterLevel(Base):
     __tablename__ = "field_water_level"
 

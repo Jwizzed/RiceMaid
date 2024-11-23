@@ -1,25 +1,32 @@
+import re
 import json
 import os
-from pathlib import Path
 import tempfile
+from pathlib import Path
+
+import google.generativeai as genai
 from fastapi import APIRouter, HTTPException, Request, status
-from linebot.v3 import WebhookHandler
+from google.generativeai.types.generation_types import GenerateContentResponse
 from linebot.exceptions import InvalidSignatureError
-from linebot.v3.webhooks import MessageEvent, TextMessageContent, ImageMessageContent
+from linebot.v3 import WebhookHandler
 from linebot.v3.messaging import (
     ApiClient,
     Configuration,
-    MessagingApi,
-    TextMessage,
-    ReplyMessageRequest,
-    MessagingApiBlob,
-    ShowLoadingAnimationRequest,
-    FlexMessage,
     FlexContainer,
+    FlexMessage,
+    MessagingApi,
+    MessagingApiBlob,
+    ReplyMessageRequest,
+    ShowLoadingAnimationRequest,
+    TextMessage,
 )
+from linebot.v3.webhooks import ImageMessageContent, MessageEvent, TextMessageContent
 
+from app.api.endpoints.carbon_credit import estimate_methane_emission
 from app.core.config import get_settings
 from app.core.model import image_prediction
+
+from tavily import TavilyClient
 
 router = APIRouter()
 
@@ -28,6 +35,56 @@ PROJECT_DIR = Path(__file__).parent.parent.parent.parent
 settings = get_settings()
 configuration = Configuration(access_token=settings.line.channel_access_token)
 handler = WebhookHandler(settings.line.channel_secret)
+
+tavily_client = TavilyClient(api_key=settings.llm.tavily_api_key)
+
+chat_sessions = {}
+genai.configure(api_key=settings.llm.gemini_acesss_token)
+
+GENERATION_CONFIG = {
+    "temperature": 1,
+    "top_p": 0.95,
+    "top_k": 40,
+    "max_output_tokens": 8192,
+    "response_mime_type": "text/plain",
+}
+
+
+def get_farm_news():
+    try:
+        response = tavily_client.search("ข่าววันนี้สำหรับชาวนาไทย", search_depth="simple")
+        results = response.get("results", [])
+
+        if not results:
+            return "ไม่พบข่าวสารใหม่สำหรับวันนี้ ลองอีกครั้งในภายหลัง"
+
+        news = "ข่าวสำหรับชาวนาไทยวันนี้:\n"
+        for i, item in enumerate(results[:3], 1):
+            title = item.get("title", "ไม่มีหัวข้อ")
+            url = item.get("url", "ไม่มีลิงก์")
+            news += f"{i}. {title}\n{url}\n"
+
+        return news.strip()
+    except Exception as e:
+        return f"เกิดข้อผิดพลาด: {str(e)}"
+
+
+def get_or_create_chat_session(user_id: str) -> genai.ChatSession:
+    """Get existing chat session or create new one for user"""
+    if user_id not in chat_sessions:
+        system_prompt = (
+            "คุณคือผู้ช่วยชาวนาไทยสำหรับการวิเคราะห์และตอบคำถามเกี่ยวกับการเกษตร "
+            "คุณต้องตอบในภาษาที่เข้าใจง่ายที่สุดสำหรับชาวนาไทย "
+            "และหลีกเลี่ยงการใช้ Markdown หรือรูปแบบการเขียนที่ซับซ้อน "
+            "เน้นการสื่อสารที่ชัดเจนและตรงประเด็น"
+            "คุณมีความรู้อย่างลึกซึ้่งในการทำนาแบบเปียกสลับแห้งและเกี่ยวกับคาร์บอนเครดิต "
+        )
+        model = genai.GenerativeModel(
+            model_name="gemini-1.5-flash",
+            generation_config=GENERATION_CONFIG,
+        )
+        chat_sessions[user_id] = model.start_chat(history=[{"role": "system", "content": system_prompt}])
+    return chat_sessions[user_id]
 
 
 @router.post(
@@ -52,19 +109,68 @@ async def line_webhook(request: Request) -> dict:
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_text_message(event: MessageEvent) -> None:
     """
-    Handle incoming text messages from the LINE chat bot.
-    Responds with a simple echo of the received text using the ApiClient and MessagingApi.
+    Handle incoming text messages and respond using Gemini LLM.
     """
     received_text: str = event.message.text
     user_id: str = event.source.user_id
 
-    with ApiClient(configuration) as api_client:
-        messaging_api = MessagingApi(api_client)
-        messaging_api.reply_message_with_http_info(
-            ReplyMessageRequest(
-                reply_token=event.reply_token, messages=[TextMessage(text=f"Received: {received_text}")]
+    try:
+        with ApiClient(configuration) as api_client:
+            api_instance_loading = MessagingApi(api_client)
+            show_loading_animation_request = ShowLoadingAnimationRequest(chatId=user_id)
+            api_instance_loading.show_loading_animation(show_loading_animation_request)
+
+        if "คำนวณคาร์บอนเครดิต" in received_text or "calculate carbon credit" in received_text:
+            response_text = (
+                "กรุณาตอบคำถามเพื่อคำนวณคาร์บอนเครดิต:\n"
+                "1. จำนวนที่ดินกี่ไร่?\n"
+                "2. อายุเก็บเกี่ยวข้าวในฤดูเพาะปลูก?\nตัวอย่าง\n5 ไร่, 120 วัน"
             )
-        )
+            chat_sessions[user_id] = "awaiting_carbon_credit_data"
+
+        elif "ข่าววันนี้" in received_text or "news" in received_text:
+            response_text = get_farm_news()
+
+        elif user_id in chat_sessions and chat_sessions[user_id] == "awaiting_carbon_credit_data":
+            match = re.match(r"(\d+)\s*ไร่,\s*(\d+)\s*วัน", received_text)
+            if match:
+                area = float(match.group(1))
+                harvest_age = int(match.group(2))
+
+                methane_emission = estimate_methane_emission(area_rice_field=area, harvest_age=harvest_age)
+
+                response_text = (
+                    f"การคำนวณคาร์บอนเครดิต:\n"
+                    f"พื้นที่: {area} ไร่\n"
+                    f"อายุเก็บเกี่ยว: {harvest_age} วัน\n"
+                    f"การปล่อยมีเทน: {methane_emission:.2f} กิโลกรัม CO2eq\n"
+                    f"คาร์บอนเครดิตที่ได้: {methane_emission*1000:.2f} หน่วย"
+                )
+                chat_sessions[user_id] = None
+
+            else:
+                response_text = (
+                    "ข้อมูลไม่ถูกต้อง กรุณาตอบตามรูปแบบนี้:\n" "จำนวนที่ดิน (ไร่), อายุเก็บเกี่ยวข้าว (วัน)\n" "ตัวอย่าง: 5 ไร่, 120 วัน"
+                )
+
+        else:
+            chat_session = get_or_create_chat_session(user_id)
+            response: GenerateContentResponse = chat_session.send_message(received_text)
+            response_text = response.text
+
+        with ApiClient(configuration) as api_client:
+            messaging_api = MessagingApi(api_client)
+            messaging_api.reply_message_with_http_info(
+                ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=response_text)])
+            )
+
+    except Exception as e:
+        error_message = f"Error processing message: {str(e)}"
+        with ApiClient(configuration) as api_client:
+            messaging_api = MessagingApi(api_client)
+            messaging_api.reply_message_with_http_info(
+                ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=error_message)])
+            )
 
 
 @handler.add(MessageEvent, message=ImageMessageContent)

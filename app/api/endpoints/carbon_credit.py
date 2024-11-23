@@ -8,7 +8,10 @@ GWP_METHANE = 25
 
 
 def estimate_methane_emission(
-    coefficient_methane_emission: float, area_rice_field: float, harvest_age: int, gwp_methane: float
+    area_rice_field: float,
+    harvest_age: int,
+    coefficient_methane_emission=METHANE_EMISSION_COEFF,
+    gwp_methane=GWP_METHANE,
 ) -> float:
     """
     Estimate the methane emission from rice fields.
