@@ -16,3 +16,8 @@ class AccessTokenResponse(BaseResponse):
 class UserResponse(BaseResponse):
     user_id: str
     email: EmailStr
+
+
+class PredictionResponse(BaseResponse):
+    predicted_label: str
+    probability: float

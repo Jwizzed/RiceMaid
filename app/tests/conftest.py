@@ -115,7 +115,7 @@ async def fixture_session_with_rollback(
 
 @pytest_asyncio.fixture(name="client", scope="function")
 async def fixture_client(session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
-    transport = ASGITransport(app=fastapi_app)  # type: ignore
+    transport = ASGITransport(app=fastapi_app)
     async with AsyncClient(transport=transport, base_url="http://test") as aclient:
         aclient.headers.update({"Host": "localhost"})
         yield aclient
