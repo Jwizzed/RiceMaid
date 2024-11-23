@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.api import api_messages
-from app.api.endpoints import auth, predictions, line_webhook, users
+from app.api.endpoints import auth, line_webhook, users
 
 # Create the auth router
 auth_router = APIRouter()
