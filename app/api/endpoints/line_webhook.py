@@ -100,11 +100,21 @@ def handle_image_message(event: MessageEvent) -> None:
                 im_width=300,
             )
 
+            label_mapping = {"BBCH11": "ระยะกล้า", "BBCH12": "ระยะยืดปล้อง", "BBCH13": "ระยะตั้งท้อง"}
+
+            show_label = label_mapping.get(predicted_label, "Unknown stage")
+            image_urls = {
+                "BBCH11": "https://i.ibb.co/gR5bfDX/BBCH11.jpg",
+                "BBCH12": "https://i.ibb.co/dbSjLg4/BBCH12.jpg",
+                "BBCH13": "https://i.ibb.co/WDkVvYJ/BBCH13.jpg",
+            }
+            image_url = image_urls.get(predicted_label, "https://example.com/default_image.png")
+
             bubble_content = {
                 "type": "bubble",
                 "hero": {
                     "type": "image",
-                    "url": "https://developers-resource.landpress.line.me/fx/img/01_1_cafe.png",
+                    "url": image_url,
                     "size": "full",
                     "aspectRatio": "20:13",
                     "aspectMode": "cover",
@@ -116,7 +126,7 @@ def handle_image_message(event: MessageEvent) -> None:
                     "contents": [
                         {
                             "type": "text",
-                            "text": predicted_label,
+                            "text": show_label,
                             "weight": "bold",
                             "size": "xl",
                         }
