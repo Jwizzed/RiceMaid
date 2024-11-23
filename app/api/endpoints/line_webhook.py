@@ -1,12 +1,16 @@
+from datetime import datetime, timedelta
 import re
 import json
 import os
 import tempfile
 from pathlib import Path
+import requests
+from typing import Optional, Dict, Any
 
 import google.generativeai as genai
+from google.generativeai.protos import Content, Part
+
 from fastapi import APIRouter, HTTPException, Request, status
-from google.generativeai.types.generation_types import GenerateContentResponse
 from linebot.exceptions import InvalidSignatureError
 from linebot.v3 import WebhookHandler
 from linebot.v3.messaging import (
@@ -28,6 +32,8 @@ from app.core.model import image_prediction
 
 from tavily import TavilyClient
 
+from app.enum.province import Province
+
 router = APIRouter()
 
 PROJECT_DIR = Path(__file__).parent.parent.parent.parent
@@ -39,7 +45,8 @@ handler = WebhookHandler(settings.line.channel_secret)
 tavily_client = TavilyClient(api_key=settings.llm.tavily_api_key)
 
 chat_sessions = {}
-genai.configure(api_key=settings.llm.gemini_acesss_token)
+chat_states = {}
+genai.configure(api_key=settings.llm.gemini_access_key)
 
 GENERATION_CONFIG = {
     "temperature": 1,
@@ -48,6 +55,75 @@ GENERATION_CONFIG = {
     "max_output_tokens": 8192,
     "response_mime_type": "text/plain",
 }
+
+
+# https://api-v3.thaiwater.net/api/v1/thaiwater30/public/waterlevel_load?basin_code=10,11,12,13,15
+# https://api-v3.thaiwater.net/api/v1/thaiwater30/public/rain_24h?basin_code=10,11,12,13,15
+# https://api-v3.thaiwater.net/api/v1/thaiwater30/public/watergate_load?basin_code=10,11,12,13,15
+
+
+def fetch_water_resources_data(
+    resource_type: str,
+    interval: str,
+    latest: bool,
+    start_datetime: Optional[str] = None,
+    end_datetime: Optional[str] = None,
+    province_code: Optional[str] = None,
+    amphoe_code: Optional[str] = None,
+    tambon_code: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Fetch water resource data from the specified API (Medium or Small).
+
+    Args:
+        resource_type (str): The resource type ('Medium' or 'Small').
+        interval (str): The data interval (e.g., 'P-Daily' or 'Daily').
+        latest (bool): Whether to fetch the latest data.
+        start_datetime (str, optional): Start datetime (required if latest is False). Format: yyyy-MM-ddTHH:mm:ss.
+        end_datetime (str, optional): End datetime (required if latest is False). Format: yyyy-MM-ddTHH:mm:ss.
+        province_code (str, optional): Province code filter.
+        amphoe_code (str, optional): Amphoe (district) code filter.
+        tambon_code (str, optional): Tambon (sub-district) code filter.
+
+    Returns:
+        Dict[str, Any]: The API response as a dictionary.
+
+    Raises:
+        ValueError: If required parameters are missing or invalid.
+        RuntimeError: For issues during the API call.
+    """
+    base_urls = {
+        "Medium": "https://api.dwr.go.th/twsapi/v1.0/MediumsizedWaterResources",
+        "Small": "https://api.dwr.go.th/twsapi/v1.0/SmallsizedWaterResources",
+    }
+
+    if resource_type not in base_urls:
+        raise ValueError("Invalid resource_type. Must be 'Medium' or 'Small'.")
+
+    if not latest and (not start_datetime or not end_datetime):
+        raise ValueError("start_datetime and end_datetime are required when 'latest' is False.")
+
+    url = base_urls[resource_type]
+    headers = {"Authorization": f"Bearer {settings.external.wstd_api_key}"}
+
+    params: dict[str, str] = {"interval": interval, "latest": str(latest).lower()}
+    if start_datetime:
+        params["startDatetime"] = start_datetime
+    if end_datetime:
+        params["endDatetime"] = end_datetime
+    if province_code:
+        params["provinceCode"] = province_code
+    if amphoe_code:
+        params["amphoeCode"] = amphoe_code
+    if tambon_code:
+        params["tambonCode"] = tambon_code
+
+    try:
+        response = requests.get(url, params=params, headers=headers, verify=False)
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        raise RuntimeError(f"Error fetching {resource_type} water resource data: {e}")
 
 
 def get_farm_news():
@@ -72,19 +148,33 @@ def get_farm_news():
 def get_or_create_chat_session(user_id: str) -> genai.ChatSession:
     """Get existing chat session or create new one for user"""
     if user_id not in chat_sessions:
-        system_prompt = (
-            "คุณคือผู้ช่วยชาวนาไทยสำหรับการวิเคราะห์และตอบคำถามเกี่ยวกับการเกษตร "
-            "คุณต้องตอบในภาษาที่เข้าใจง่ายที่สุดสำหรับชาวนาไทย "
-            "และหลีกเลี่ยงการใช้ Markdown หรือรูปแบบการเขียนที่ซับซ้อน "
-            "เน้นการสื่อสารที่ชัดเจนและตรงประเด็น"
-            "คุณมีความรู้อย่างลึกซึ้่งในการทำนาแบบเปียกสลับแห้งและเกี่ยวกับคาร์บอนเครดิต "
-        )
+        context = [
+            Content(
+                role='user',
+                parts=[
+                    Part(text="คูณคือผู้ช่วยชาวนาไทยสำหรับการวิเคราะห์และตอบคำถามเกี่ยวกับการเกษตร"),
+                    Part(text="และหลีกเลี่ยงการใช้ Markdown หรือรูปแบบการเขียนที่ซับซ้อน"),
+                    Part(text="เน้นการสื่อสารที่ชัดเจนและตรงประเด็น"),
+                    Part(text="คุณมีความรู้อย่างลึกซึ้่งในการทำนาแบบเปียกสลับแห้งและเกี่ยวกับคาร์บอนเครดิต"),
+                    Part(text="คุณสามารถวิเคราะห์ข้อมูลจำนวนมากและสรุปออกมาเป็นข้อมูลทางสถิติที่เขาใจง่าย"),
+                ],
+            )
+        ]
+
         model = genai.GenerativeModel(
             model_name="gemini-1.5-flash",
             generation_config=GENERATION_CONFIG,
         )
-        chat_sessions[user_id] = model.start_chat(history=[{"role": "system", "content": system_prompt}])
+        chat_sessions[user_id] = model.start_chat(history=context)
     return chat_sessions[user_id]
+
+
+def set_chat_state(user_id: str, state: Optional[str] = None):
+    chat_states[user_id] = state
+
+
+def get_chat_state(user_id: str) -> Optional[str]:
+    return chat_states.get(user_id)
 
 
 @router.post(
@@ -120,18 +210,76 @@ def handle_text_message(event: MessageEvent) -> None:
             show_loading_animation_request = ShowLoadingAnimationRequest(chatId=user_id)
             api_instance_loading.show_loading_animation(show_loading_animation_request)
 
+        state = get_chat_state(user_id)
+
         if "คำนวณคาร์บอนเครดิต" in received_text or "calculate carbon credit" in received_text:
             response_text = (
                 "กรุณาตอบคำถามเพื่อคำนวณคาร์บอนเครดิต:\n"
                 "1. จำนวนที่ดินกี่ไร่?\n"
                 "2. อายุเก็บเกี่ยวข้าวในฤดูเพาะปลูก?\nตัวอย่าง\n5 ไร่, 120 วัน"
             )
-            chat_sessions[user_id] = "awaiting_carbon_credit_data"
+            set_chat_state(user_id, "awaiting_carbon_credit_data")
 
         elif "ข่าววันนี้" in received_text or "news" in received_text:
             response_text = get_farm_news()
 
-        elif user_id in chat_sessions and chat_sessions[user_id] == "awaiting_carbon_credit_data":
+        elif "ข้อมูลน้ำ" in received_text or "water data" in received_text:
+            response_text = "กรุณาพิมพ์ชื่อจังหวัดเพื่อรับข่าวน้ำวันนี้\n" "ตัวอย่าง: สุพรรณบุรี, นครราชสีมา"
+            set_chat_state(user_id, "awaiting_province")
+
+        elif user_id in chat_sessions and state == "awaiting_province":
+            province_name = received_text
+            province = next(
+                (
+                    prov
+                    for prov in Province
+                    if prov.value.name_th == province_name or prov.value.name_en == province_name
+                ),
+                None,
+            )
+
+            if province:
+                province_code = province.value.code
+                start_datetime = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S")
+                end_datetime = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+                smalL_data = fetch_water_resources_data(
+                    resource_type="Small",
+                    interval="P-Daily",
+                    latest=False,
+                    start_datetime=start_datetime,
+                    end_datetime=end_datetime,
+                    province_code=str(province_code),
+                )
+
+                medium_data = fetch_water_resources_data(
+                    resource_type="Medium",
+                    interval="P-Daily",
+                    latest=False,
+                    start_datetime=start_datetime,
+                    end_datetime=end_datetime,
+                    province_code=str(province_code),
+                )
+
+                chat_session = get_or_create_chat_session(user_id)
+                medium_fetched_data_str = json.dumps(medium_data, ensure_ascii=False)
+                small_fetched_data_str = json.dumps(smalL_data, ensure_ascii=False)
+                summary_prompt = f"""
+                    "สรุปข้อมูลเกี่ยวกับสถานการณ์น้ำในจังหวัดนี้ในช่วง 30 วันที่ผ่านมา:\n"
+                    f"อ่างเก็บน้ำขนาดกลาง: {medium_fetched_data_str}"
+                    f"อ่างเก็บน้ำขนาดเล็ก: {small_fetched_data_str}"
+                    "\nให้สรุปข้อมูลด้านบนออกมาเป็นรายงานปริมาณน้ำและวิเคราะห์สถานการณ์น้ำในจังหวัดนี้"
+                """
+                response = chat_session.send_message(summary_prompt)
+                response_text = response.text
+                response_text = summary_prompt
+
+                set_chat_state(user_id, None)
+            else:
+                response_text = "ไม่พบข้อมูลจังหวัด กรุณาลองใหม่อีกครั้งและระบุชื่อจังหวัดให้ถูกต้อง"
+                set_chat_state(user_id, None)
+
+        elif user_id in chat_sessions and state == "awaiting_carbon_credit_data":
             match = re.match(r"(\d+)\s*ไร่,\s*(\d+)\s*วัน", received_text)
             if match:
                 area = float(match.group(1))
@@ -150,13 +298,16 @@ def handle_text_message(event: MessageEvent) -> None:
 
             else:
                 response_text = (
-                    "ข้อมูลไม่ถูกต้อง กรุณาตอบตามรูปแบบนี้:\n" "จำนวนที่ดิน (ไร่), อายุเก็บเกี่ยวข้าว (วัน)\n" "ตัวอย่าง: 5 ไร่, 120 วัน"
+                    "ข้อมูลไม่ถูกต้อง\nโปรดถามอีกครั้ง\nกรุณาตอบตามรูปแบบนี้:\n"
+                    "จำนวนที่ดิน (ไร่), อายุเก็บเกี่ยวข้าว (วัน)\n"
+                    "ตัวอย่าง: 5 ไร่, 120 วัน"
                 )
+                set_chat_state(user_id, None)
 
         else:
             chat_session = get_or_create_chat_session(user_id)
-            response: GenerateContentResponse = chat_session.send_message(received_text)
-            response_text = response.text
+            response = chat_session.send_message(received_text)
+            response_text = str(response.text)
 
         with ApiClient(configuration) as api_client:
             messaging_api = MessagingApi(api_client)

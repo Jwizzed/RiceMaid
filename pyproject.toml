@@ -20,6 +20,7 @@ tensorflow = "^2.18.0"
 apscheduler = "^3.10.4"
 google-generativeai = "^0.8.3"
 tavily-python = "^0.5.0"
+vertexai = "^1.71.1"
 
 [tool.poetry.group.dev.dependencies]
 coverage = "^7.6.1"

@@ -52,7 +52,7 @@ class ExternalApi(BaseModel):
 
 
 class LLMConfig(BaseModel):
-    gemini_acesss_token: str = os.getenv("LLM__GEMINI_ACCESS_TOKEN")
+    gemini_access_key: str = os.getenv("LLM__GEMINI_ACCESS_KEY")
     tavily_api_key: str = os.getenv("LLM__TAVILY_API_KEY")
 
 
