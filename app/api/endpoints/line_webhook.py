@@ -1,22 +1,24 @@
 import json
 import os
-from pathlib import Path
 import tempfile
+from pathlib import Path
+
+import google.generativeai as genai
 from fastapi import APIRouter, HTTPException, Request, status
-from linebot.v3 import WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.v3.webhooks import MessageEvent, TextMessageContent, ImageMessageContent
+from linebot.v3 import WebhookHandler
 from linebot.v3.messaging import (
     ApiClient,
     Configuration,
-    MessagingApi,
-    TextMessage,
-    ReplyMessageRequest,
-    MessagingApiBlob,
-    ShowLoadingAnimationRequest,
-    FlexMessage,
     FlexContainer,
+    FlexMessage,
+    MessagingApi,
+    MessagingApiBlob,
+    ReplyMessageRequest,
+    ShowLoadingAnimationRequest,
+    TextMessage,
 )
+from linebot.v3.webhooks import ImageMessageContent, MessageEvent, TextMessageContent
 
 from app.core.config import get_settings
 from app.core.model import image_prediction
@@ -28,6 +30,28 @@ PROJECT_DIR = Path(__file__).parent.parent.parent.parent
 settings = get_settings()
 configuration = Configuration(access_token=settings.line.channel_access_token)
 handler = WebhookHandler(settings.line.channel_secret)
+
+chat_sessions = {}
+genai.configure(api_key="AIzaSyCmqgD1yujkJRSYzeC9foqtzTnse1AmKAk")
+
+GENERATION_CONFIG = {
+    "temperature": 1,
+    "top_p": 0.95,
+    "top_k": 40,
+    "max_output_tokens": 8192,
+    "response_mime_type": "text/plain",
+}
+
+
+def get_or_create_chat_session(user_id: str) -> genai.ChatSession:
+    """Get existing chat session or create new one for user"""
+    if user_id not in chat_sessions:
+        model = genai.GenerativeModel(
+            model_name="gemini-1.5-flash",
+            generation_config=GENERATION_CONFIG,
+        )
+        chat_sessions[user_id] = model.start_chat(history=[])
+    return chat_sessions[user_id]
 
 
 @router.post(
@@ -52,19 +76,36 @@ async def line_webhook(request: Request) -> dict:
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_text_message(event: MessageEvent) -> None:
     """
-    Handle incoming text messages from the LINE chat bot.
-    Responds with a simple echo of the received text using the ApiClient and MessagingApi.
+    Handle incoming text messages and respond using Gemini LLM.
     """
     received_text: str = event.message.text
     user_id: str = event.source.user_id
 
-    with ApiClient(configuration) as api_client:
-        messaging_api = MessagingApi(api_client)
-        messaging_api.reply_message_with_http_info(
-            ReplyMessageRequest(
-                reply_token=event.reply_token, messages=[TextMessage(text=f"Received: {received_text}")]
+    try:
+        chat_session = get_or_create_chat_session(user_id)
+
+        response = chat_session.send_message(received_text)
+        response_text = response.text
+
+        with ApiClient(configuration) as api_client:
+            messaging_api = MessagingApi(api_client)
+            messaging_api.reply_message_with_http_info(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=response_text)]
+                )
             )
-        )
+
+    except Exception as e:
+        error_message = f"Error processing message: {str(e)}"
+        with ApiClient(configuration) as api_client:
+            messaging_api = MessagingApi(api_client)
+            messaging_api.reply_message_with_http_info(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=error_message)]
+                )
+            )
 
 
 @handler.add(MessageEvent, message=ImageMessageContent)

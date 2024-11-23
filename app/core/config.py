@@ -14,7 +14,6 @@
 # Note, complex types like lists are read as json-encoded strings.
 
 import os
-
 from functools import lru_cache
 from pathlib import Path
 
@@ -79,4 +78,4 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    return Settings()  # type: ignore
+    return Settings()
