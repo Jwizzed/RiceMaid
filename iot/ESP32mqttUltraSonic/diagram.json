@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "author": "Dhruwank Vankawala",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-esp32-devkit-v1", "id": "esp", "top": 36.67, "left": -106, "attrs": {} },
+    {
+      "type": "wokwi-hc-sr04",
+      "id": "ultrasonic1",
+      "top": -32.76,
+      "left": 42.17,
+      "attrs": { "distance": "178" }
+    },
+    { "type": "wokwi-vcc", "id": "vcc1", "top": 48.76, "left": 57.6, "attrs": {} },
+    { "type": "wokwi-gnd", "id": "gnd1", "top": 57.07, "left": 193.4, "attrs": {} },
+    {
+      "type": "wokwi-buzzer",
+      "id": "bz1",
+      "top": 84.81,
+      "left": -518.62,
+      "attrs": { "volume": "0.1" }
+    },
+    {
+      "type": "wokwi-lcd1602",
+      "id": "lcd1",
+      "top": 135.92,
+      "left": 57.55,
+      "attrs": { "pins": "i2c" }
+    }
+  ],
+  "connections": [
+    [ "esp:TX0", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX0", "$serialMonitor:TX", "", [] ],
+    [ "ultrasonic1:VCC", "vcc1:VCC", "red", [ "v25.33", "h-47.3" ] ],
+    [ "ultrasonic1:GND", "gnd1:GND", "black", [ "v13.33", "h29.36", "v-18.67" ] ],
+    [ "ultrasonic1:TRIG", "esp:D23", "green", [ "v33.33", "h-86.64", "v-34.67" ] ],
+    [ "lcd1:GND", "gnd1:GND", "black", [ "h-11.79", "v-41.69", "h176.25", "v-72.96" ] ],
+    [ "lcd1:VCC", "vcc1:VCC", "red", [ "h-19.99", "v-60.21", "h10.66", "v-45.91" ] ],
+    [ "esp:D21", "lcd1:SDA", "green", [ "h21.67", "v18.46", "h16.4", "v67.22" ] ],
+    [ "esp:D22", "lcd1:SCL", "orange", [ "h29.04", "v126.06" ] ],
+    [ "esp:D19", "ultrasonic1:ECHO", "blue", [ "h0" ] ]
+  ],
+  "dependencies": {}
+}

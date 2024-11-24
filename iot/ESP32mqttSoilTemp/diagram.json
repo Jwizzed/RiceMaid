@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "author": "Combined Sensors",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-breadboard-half", "id": "bb1", "top": 54.6, "left": 31.6, "attrs": {} },
+    { "type": "wokwi-esp32-devkit-v1", "id": "esp", "top": 81.5, "left": -149, "attrs": {} },
+    {
+      "type": "wokwi-lcd1602",
+      "id": "lcd1",
+      "top": -99.2,
+      "left": 34.4,
+      "attrs": { "pins": "i2c" }
+    },
+    { "type": "chip-soil_sensor", "id": "soil1", "top": 298.62, "left": 72, "attrs": {} },
+    {
+      "type": "wokwi-ntc-temperature-sensor",
+      "id": "temp1",
+      "top": -7,
+      "left": -202.2,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led1",
+      "top": 34.8,
+      "left": -245.8,
+      "attrs": { "color": "red" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": 224.75,
+      "left": -259.2,
+      "attrs": { "value": "5600" }
+    }
+  ],
+  "connections": [
+    [ "esp:TX0", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX0", "$serialMonitor:TX", "", [] ],
+    [ "esp:3V3", "bb1:bp.1", "red", [ "v0" ] ],
+    [ "esp:GND.1", "bb1:bn.1", "black", [ "h18.9", "v19.1" ] ],
+    [ "esp:D34", "soil1:A0", "green", [ "h-28.8", "v-0.2" ] ],
+    [ "soil1:VCC", "bb1:bp.2", "red", [ "h0" ] ],
+    [ "soil1:GND", "bb1:bn.2", "black", [ "h0" ] ],
+    [ "esp:D23", "lcd1:SDA", "blue", [ "h18.9", "v0.1" ] ],
+    [ "esp:D22", "lcd1:SCL", "#8f4814", [ "h28.5", "v-153.9" ] ],
+    [ "bb1:bp.1", "lcd1:VCC", "red", [ "v-10.5", "h-46.4", "v-288" ] ],
+    [ "bb1:bn.1", "lcd1:GND", "black", [ "v17.9", "h-56", "v-336" ] ],
+    [ "esp:D14", "led1:A", "purple", [ "h0" ] ],
+    [ "esp:GND.2", "r1:2", "black", [ "h0" ] ],
+    [ "led1:C", "r1:1", "black", [ "v124.8", "h-38", "v28.8" ] ],
+    [ "temp1:GND", "bb1:bn.4", "black", [ "h115.2", "v192", "h57.6" ] ],
+    [ "esp:3V3", "temp1:VCC", "red", [ "v19.2", "h38.1", "v-192", "h0", "v-38.4" ] ],
+    [ "temp1:OUT", "esp:D33", "magenta", [ "h28.8", "v38.3", "h-124.8", "v86.4", "h9.6" ] ]
+  ],
+  "dependencies": {}
+}
