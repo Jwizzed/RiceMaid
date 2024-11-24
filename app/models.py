@@ -47,3 +47,31 @@ class RefreshToken(Base):
         ForeignKey("user_account.user_id", ondelete="CASCADE"),
     )
     user: Mapped["User"] = relationship(back_populates="refresh_tokens")
+
+
+class LineUser(Base):
+    __tablename__ = "line_user"
+
+    user_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(256), nullable=False)
+    province: Mapped[str] = mapped_column(String(256), nullable=False)
+
+
+class FieldWaterLevel(Base):
+    __tablename__ = "field_water_level"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    device_id: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
+    water_level: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    create_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class FieldStats(Base):
+    __tablename__ = "field_stats"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    device_id: Mapped[str] = mapped_column(String(256), nullable=False, index=True)
+    soil_moisture: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    soil_status: Mapped[str] = mapped_column(String(256), nullable=False)
+    temperature: Mapped[float] = mapped_column(BigInteger, nullable=False)
+    create_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

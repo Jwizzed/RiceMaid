@@ -51,11 +51,17 @@ class ExternalApi(BaseModel):
     wstd_api_key: str = os.getenv("EXTERNAL__WSTD_API_KEY")
 
 
+class LLMConfig(BaseModel):
+    gemini_access_key: str = os.getenv("LLM__GEMINI_ACCESS_KEY")
+    tavily_api_key: str = os.getenv("LLM__TAVILY_API_KEY")
+
+
 class Settings(BaseSettings):
     security: Security
     database: Database
     line: LineConfig
     external: ExternalApi
+    llm: LLMConfig
 
     @computed_field  # type: ignore[prop-decorator]
     @property
